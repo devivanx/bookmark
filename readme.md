@@ -1,15 +1,44 @@
-# Bookmark CLI - Architectural Overview
+# Bookmark CLI
 
-Bookmark is a cross-platform command-line utility designed to register, manage, and execute directory shortcuts or commands. This document outlines the utility's high-level architecture, component design, and storage mechanisms.
+Bookmark is a small cross-platform .NET command-line utility for saving named shell commands and running them by alias. It stores the aliases as JSON beside the built executable and uses the operating system's command shell to execute a selected entry.
+
+## Run it
+
+### Prerequisites
+
+- .NET 10 SDK
+
+From the repository root, display the built-in usage:
+
+```sh
+dotnet run --project Bookmark/Bookmark.csproj -- help
+```
+
+Add a named command, list saved entries, run one by its key, or remove it:
+
+```sh
+dotnet run --project Bookmark/Bookmark.csproj -- add projects "cd /d C:\Projects && start cmd /K"
+dotnet run --project Bookmark/Bookmark.csproj -- list
+dotnet run --project Bookmark/Bookmark.csproj -- projects
+dotnet run --project Bookmark/Bookmark.csproj -- remove projects
+```
+
+The saved value is an operating-system shell command: Windows uses `cmd.exe`, while macOS/Linux use `/bin/sh`. Adapt commands to the current shell and platform. The application creates `bookmarks.json` in `AppContext.BaseDirectory` (for `dotnet run`, this is the build output directory).
+
+Build the CLI with:
+
+```sh
+dotnet build Bookmark.slnx
+```
 
 ---
 
 ## Utility Overview
 
-The primary goal of Bookmark is to serve as a fast command-line shortcut executor. It allows developers to:
-1. **Register** shortcuts linking short keys/aliases to directory paths or terminal commands.
-2. **Retrieve and List** currently registered shortcuts.
-3. **Execute** commands or spawn shells directly in bookmarked paths across different operating systems.
+Bookmark provides three core operations:
+1. **Register** a shell command under a short key or alias.
+2. **List** saved key-command pairs or remove an entry.
+3. **Execute** the command associated with a key in the current operating system's shell.
 
 ---
 
@@ -27,18 +56,18 @@ graph TD
 ```
 
 ### 1. Entry Point
-* **File**: [Program.cs](file:///d:/PROYECTOS/bookmark/bookmark/Bookmark/Program.cs)
+* **File**: [Program.cs](Bookmark/Program.cs)
 * **Responsibility**: Parses raw command-line arguments (`args`) passed during execution. It extracts the command verb (e.g., `add`, `remove`, `list`, `help`) along with optional parameters (key and value), and immediately delegates execution control to the command handler.
 
 ### 2. Command Controller
-* **File**: [CommandHandler.cs](file:///d:/PROYECTOS/bookmark/bookmark/Bookmark/CommandHandler.cs)
+* **File**: [CommandHandler.cs](Bookmark/CommandHandler.cs)
 * **Responsibility**: 
   * Orchestrates user operations based on the input verbs.
   * Dispatches administrative tasks (adding, removing, and listing bookmarks) to the persistence manager.
   * Implements cross-platform shell execution logic to execute shell/terminal commands corresponding to a bookmark key.
 
 ### 3. Persistence Manager
-* **File**: [BookmarkManager.cs](file:///d:/PROYECTOS/bookmark/bookmark/Bookmark/BookmarkManager.cs)
+* **File**: [BookmarkManager.cs](Bookmark/BookmarkManager.cs)
 * **Responsibility**: Manages the life cycle of the bookmarked data. It is responsible for loading and saving the data structure to a persistent file location.
 
 ---
@@ -47,10 +76,22 @@ graph TD
 
 ### 1. Data Structure & Storage Format
 * **In-Memory Representation**: Bookmarks are managed using a hash-map table structure represented by a C# generic `Dictionary<string, string>`. This guarantees $O(1)$ lookup times for bookmarks.
-* **Persistent Format**: The key-value pairs are stored in standard JSON format in a file named `bookmarks.json`, located in the application's base directory ([AppContext.BaseDirectory](file:///d:/PROYECTOS/bookmark/bookmark/Bookmark/BookmarkManager.cs#L7)).
+* **Persistent Format**: The key-value pairs are stored in standard JSON format in a file named `bookmarks.json`, located in the application's base directory ([`AppContext.BaseDirectory`](Bookmark/BookmarkManager.cs)).
 * **Persistence Mechanism**: 
   * **Reads**: Reads are performed on-demand. If the JSON file does not exist, an empty dictionary is returned. Otherwise, standard JSON deserialization is used.
-  * **Writes**: Modifications (additions or deletions) update the in-memory dictionary and immediately write the serialized, indented JSON back to disk to ensure immediate persistence.
+* **Writes**: Modifications (additions or deletions) update the in-memory dictionary and immediately write the serialized, indented JSON back to disk to ensure immediate persistence.
+
+## Project layout
+
+```text
+Bookmark.slnx
+└── Bookmark/
+    ├── Program.cs          CLI entry point
+    ├── CommandHandler.cs   Argument dispatch and shell process execution
+    └── BookmarkManager.cs  JSON-backed alias storage
+```
+
+This repository contains one executable project and does not currently include an automated test project. Saved shell commands execute with the permissions of the current user.
 
 ### 2. Cross-Platform Shell Execution Algorithm
 To ensure compatibility across operating systems, the shell execution engine determines the operating system environment at runtime:
